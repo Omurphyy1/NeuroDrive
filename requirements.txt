@@ -1,0 +1,27 @@
+# ==========================================================================
+# NeuroDrive — Dependências Pinadas
+# Python 3.11 | TCC Engenharia de Controle e Automação
+# ==========================================================================
+
+# --- Rendering & Game Engine ---
+pygame-ce==2.5.2          # Community Edition (melhor suporte Windows)
+
+# --- RL Framework ---
+gymnasium==0.29.1
+stable-baselines3==2.3.2
+
+# --- Deep Learning ---
+torch==2.2.2
+numpy==1.26.4
+
+# --- Computer Vision ---
+ultralytics==8.2.0        # YOLOv8
+opencv-python==4.9.0.80
+
+# --- Monitoring ---
+tensorboard==2.17.0
+
+# --- Quality & Testing ---
+pytest==8.2.0
+black==24.4.2
+mypy==1.10.0

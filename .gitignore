@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyTorch models
+*.pt
+*.pth
+models/
+
+# YOLO
+runs/
+datasets/
+
+# TensorBoard
+tb_logs/
+
+# Weights & Biases
+wandb/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Pytest
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
