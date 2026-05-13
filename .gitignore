@@ -3,10 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environment
-venv/
-.venv/
-env/
+# Virtual environment (root-level only, not neurodrive/env/)
+/venv/
+/.venv/
 
 # IDE
 .vscode/
