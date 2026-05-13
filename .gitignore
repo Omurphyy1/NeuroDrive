@@ -42,3 +42,6 @@ build/
 
 # MyPy
 .mypy_cache/
+
+# Artifacts internos
+implementation_plan.md
