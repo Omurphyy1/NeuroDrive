@@ -26,13 +26,25 @@ logger = logging.getLogger(__name__)
 SAFE_DISTANCE_PX: Final[float] = 80.0
 
 # Peso da penalidade de segurança por objeto
-SAFETY_WEIGHT: Final[float] = 0.5
+# v2: 0.5 → 2.0 — agente baseline ignorava objetos próximos, colisão 75%.
+# Aumentar o peso força aprendizado de desvio ANTES de colidir.
+SAFETY_WEIGHT: Final[float] = 2.0
 
 # Penalidade por avançar sinal vermelho
 RED_LIGHT_PENALTY: Final[float] = -10.0
 
 # Penalidade por mudança brusca de ação
 SMOOTHNESS_PENALTY: Final[float] = -0.1
+
+# Bônus por sobreviver (encoraja episódios mais longos)
+# v2: Adicionado porque o agente terminava em ~370 steps por colisão.
+# Sem alive bonus, não há incentivo para evitar terminação.
+ALIVE_BONUS: Final[float] = 0.05
+
+# Amplificação do sinal de progresso
+# v2: r_progress ∈ [-0.001, 0.001] era negligível comparado a r_safety.
+# Escalar por 10x torna o sinal direcional audível para o PPO.
+PROGRESS_SCALE: Final[float] = 10.0
 
 # Recompensa terminal
 GOAL_REWARD: Final[float] = 100.0
@@ -117,8 +129,8 @@ def compute_reward(
     """
     components: dict[str, float] = {}
 
-    # ── 1. Progresso (potential-based) ──
-    r_progress = potential(dist_to_goal_curr) - potential(dist_to_goal_prev)
+    # ── 1. Progresso (potential-based, amplificado) ──
+    r_progress = (potential(dist_to_goal_curr) - potential(dist_to_goal_prev)) * PROGRESS_SCALE
     components["r_progress"] = r_progress
 
     # ── 2. Segurança (proximidade a objetos) ──
@@ -154,8 +166,12 @@ def compute_reward(
         r_terminal = COLLISION_PENALTY * 0.5  # menos severo que colisão
     components["r_terminal"] = r_terminal
 
+    # ── 6. Alive bonus ──
+    r_alive = ALIVE_BONUS if not (collision or goal_reached or off_road) else 0.0
+    components["r_alive"] = r_alive
+
     # ── Total ──
-    r_total = r_progress + r_safety + r_traffic + r_smooth + r_terminal
+    r_total = r_progress + r_safety + r_traffic + r_smooth + r_terminal + r_alive
     components["r_total"] = r_total
 
     return r_total, components

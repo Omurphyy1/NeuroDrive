@@ -220,7 +220,7 @@ class TestComputeReward:
         )
         expected = (
             c["r_progress"] + c["r_safety"] + c["r_traffic"]
-            + c["r_smooth"] + c["r_terminal"]
+            + c["r_smooth"] + c["r_terminal"] + c["r_alive"]
         )
         assert abs(r - expected) < 1e-6
 

@@ -49,9 +49,9 @@ class TestCityDriveEnvReset:
         assert obs["detections"].dtype == np.float32
 
     def test_ego_state_shape(self, env: CityDriveEnv) -> None:
-        """Ego state deve ter shape (5,)."""
+        """Ego state deve ter shape (6,)."""
         obs, _ = env.reset(seed=42)
-        assert obs["ego_state"].shape == (5,)
+        assert obs["ego_state"].shape == (6,)
         assert obs["ego_state"].dtype == np.float32
 
     def test_obs_in_valid_range(self, env: CityDriveEnv) -> None:

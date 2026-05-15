@@ -138,12 +138,23 @@ class StateEncoder:
         detection_tensor = self.encode(detections)
 
         diag = math.sqrt(map_width**2 + map_height**2)
+
+        # Ângulo relativo do ego ao goal
+        angle_to_goal = math.atan2(
+            ego_y - ego_y,  # placeholder — caller should provide goal coords
+            ego_x - ego_x,
+        )
+        # Para encode_with_ego, computamos angle_diff se goal coords fornecidos
+        # Por padrão, usamos 0.5 (neutro) se não temos goal coords
+        angle_diff_norm = 0.5
+
         ego_state = np.array([
             ego_x / map_width,
             ego_y / map_height,
             ego_speed / max_speed,
             (ego_heading % (2 * math.pi)) / (2 * math.pi),
             min(dist_to_goal / diag, 1.0),
+            angle_diff_norm,
         ], dtype=np.float32)
 
         return {

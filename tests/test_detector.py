@@ -167,7 +167,7 @@ class TestStateEncoder:
         assert "detections" in obs
         assert "ego_state" in obs
         assert obs["detections"].shape == (MAX_DETECTIONS, 6)
-        assert obs["ego_state"].shape == (5,)
+        assert obs["ego_state"].shape == (6,)
         assert obs["ego_state"].dtype == np.float32
 
     def test_ego_state_normalized(

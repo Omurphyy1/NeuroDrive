@@ -125,7 +125,7 @@ class CityDriveEnv(gym.Env):
             ),
             "ego_state": spaces.Box(
                 low=0.0, high=1.0,
-                shape=(5,),
+                shape=(6,),
                 dtype=np.float32,
             ),
         })
@@ -352,16 +352,34 @@ class CityDriveEnv(gym.Env):
         """Constrói vetor de estado do ego normalizado.
 
         Returns:
-            Array (5,) com [pos_x, pos_y, velocity, heading, dist_to_goal]
-            todos normalizados para [0, 1].
+            Array (6,) com [pos_x, pos_y, velocity, heading, dist_to_goal,
+            angle_to_goal] todos normalizados para [0, 1].
+
+        Note (decisão de design v2):
+            Adicionamos angle_to_goal porque o agente baseline não sabia
+            PARA QUAL LADO virar. Sem essa informação, a política precisa
+            memorizar a relação entre pos_x/pos_y e heading, o que é
+            extremamente difícil para uma MLP rasa. Com o ângulo explícito,
+            o agente pode aprender diretamente: ângulo > 0.5 → virar direita.
         """
         diag = math.sqrt(MAP_WIDTH**2 + MAP_HEIGHT**2)
+        # Ângulo do ego ao goal, normalizado para [0, 1]
+        angle_to_goal = math.atan2(
+            self._goal_y - self._ego_y,
+            self._goal_x - self._ego_x,
+        )
+        # Diferença relativa ao heading (em qual direção virar)
+        angle_diff = (angle_to_goal - self._ego_heading + math.pi) % (2 * math.pi) - math.pi
+        # Normaliza de [-π, π] para [0, 1]
+        angle_diff_norm = (angle_diff + math.pi) / (2 * math.pi)
+
         return np.array([
             self._ego_x / MAP_WIDTH,
             self._ego_y / MAP_HEIGHT,
             self._ego_speed / EGO_MAX_SPEED,
             (self._ego_heading % (2 * math.pi)) / (2 * math.pi),
             min(self._dist_to_goal() / diag, 1.0),
+            angle_diff_norm,
         ], dtype=np.float32)
 
     def _get_obs(self) -> dict[str, np.ndarray]:
