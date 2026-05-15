@@ -110,10 +110,10 @@ neurodrive/
 
 | Fase | Semanas | Escopo | Status |
 |------|---------|--------|--------|
-| 1 | 1–3 | Ambiente de Jogo | 🔄 Em progresso |
-| 2 | 4–6 | Dataset + Fine-tune YOLO | ⬜ Pendente |
-| 3 | 7–9 | Integração YOLO ↔ Gymnasium | ⬜ Pendente |
-| 4 | 10–13 | Treino DRL + Experimentos | ⬜ Pendente |
+| 1 | 1–3 | Ambiente de Jogo | ✅ Completo |
+| 2 | 4–6 | Dataset + Fine-tune YOLO | ✅ Completo |
+| 3 | 7–9 | Integração YOLO ↔ Gymnasium | ✅ Completo |
+| 4 | 10–13 | Treino DRL + Experimentos | 🔄 Em progresso |
 | 5 | 14–16 | Análise + Escrita TCC | ⬜ Pendente |
 
 ## Stack Tecnológico
