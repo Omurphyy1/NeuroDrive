@@ -1,4 +1,4 @@
-# NeuroDrive 🧠🚗
+# NeuroDrive
 
 **Deep Reinforcement Learning para Direção Autônoma em Cidade 2D**
 
