@@ -155,14 +155,14 @@ class TestCityDriveEnvStep:
 class TestCityDriveEnvCollision:
     """Testes para detecção de colisão e off-road."""
 
-    def test_off_road_terminates(self, env: CityDriveEnv) -> None:
-        """Sair da via deve encerrar o episódio."""
+    def test_off_road_does_not_terminate(self, env: CityDriveEnv) -> None:
+        """Sair da via NÃO deve encerrar o episódio (v3: penalidade contínua)."""
         env.reset(seed=42)
         # Força posição fora da via
         env._ego_x = 100.0  # calçada/quadrante
         env._ego_y = 100.0
         _, _, terminated, _, info = env.step(ACTION_STOP)
-        assert terminated is True
+        assert terminated is False  # v3: off-road não é terminal
         assert info.get("off_road") is True
 
 

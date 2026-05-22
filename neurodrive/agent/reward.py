@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 SAFE_DISTANCE_PX: Final[float] = 80.0
 
 # Peso da penalidade de segurança por objeto
-# v2: 0.5 → 2.0 — agente baseline ignorava objetos próximos, colisão 75%.
-# Aumentar o peso força aprendizado de desvio ANTES de colidir.
-SAFETY_WEIGHT: Final[float] = 2.0
+# v3: 2.0 → 1.0 — v2 fazia o agente desviar demais e sair da via (75% off-road).
+# 1.0 é meio-termo entre v1 (0.5, ignorava) e v2 (2.0, over-steered).
+SAFETY_WEIGHT: Final[float] = 1.0
 
 # Penalidade por avançar sinal vermelho
 RED_LIGHT_PENALTY: Final[float] = -10.0
@@ -37,14 +37,22 @@ RED_LIGHT_PENALTY: Final[float] = -10.0
 SMOOTHNESS_PENALTY: Final[float] = -0.1
 
 # Bônus por sobreviver (encoraja episódios mais longos)
-# v2: Adicionado porque o agente terminava em ~370 steps por colisão.
-# Sem alive bonus, não há incentivo para evitar terminação.
 ALIVE_BONUS: Final[float] = 0.05
 
 # Amplificação do sinal de progresso
-# v2: r_progress ∈ [-0.001, 0.001] era negligível comparado a r_safety.
-# Escalar por 10x torna o sinal direcional audível para o PPO.
 PROGRESS_SCALE: Final[float] = 10.0
+
+# Penalidade por estar fora da via (PER STEP, não terminal)
+# v3: off-road deixou de ser terminação imediata. Agora é penalidade
+# contínua que permite recuperação. O agente aprende a voltar à via
+# em vez de receber -50 e reiniciar (o que não ensina como corrigir).
+OFF_ROAD_PENALTY: Final[float] = -2.0
+
+# Peso do lane-keeping (centralização na via)
+# v3: Novo componente — recompensa proporcional à proximidade do centro
+# da via. Encoraja o agente a manter-se no meio da faixa.
+LANE_KEEP_WEIGHT: Final[float] = 0.02
+ROAD_HALF_WIDTH: Final[float] = 40.0   # metade da largura da via (80/2)
 
 # Recompensa terminal
 GOAL_REWARD: Final[float] = 100.0
@@ -91,8 +99,9 @@ def compute_reward(
     collision: bool,
     goal_reached: bool,
     off_road: bool,
+    dist_to_road_center: float = 0.0,
 ) -> tuple[float, dict[str, float]]:
-    """Calcula a recompensa total com 5 componentes independentes.
+    """Calcula a recompensa total com 8 componentes independentes.
 
     Componentes:
         1. r_progress: φ(s') − φ(s) — progresso em direção ao goal
@@ -100,32 +109,32 @@ def compute_reward(
         3. r_traffic: penalidade por avançar sinal vermelho
         4. r_smooth: penalidade por mudança brusca de ação
         5. r_terminal: +100 (goal) ou -100 (colisão)
+        6. r_alive: bônus por sobreviver
+        7. r_lane: bônus por centralização na via
+        8. r_off_road: penalidade por estar fora da via (per-step)
 
     Args:
         dist_to_goal_prev: Distância ao goal no step anterior (px).
         dist_to_goal_curr: Distância ao goal no step atual (px).
         distances_to_objects: Distâncias a cada objeto detectado (px).
         object_weights: Peso da penalidade por tipo de objeto.
-            Se None, usa 1.0 para todos.
-        red_light_detected: True se semáforo vermelho foi detectado
-            e o agente está avançando (não parado).
+        red_light_detected: True se semáforo vermelho foi detectado.
         action_prev: Ação do step anterior (None no primeiro step).
         action_curr: Ação do step atual.
-        collision: True se houve colisão (ego vs NPC ou ego vs calçada).
+        collision: True se houve colisão com NPC.
         goal_reached: True se o agente atingiu o destino.
-        off_road: True se o agente saiu da via.
+        off_road: True se o agente está fora da via.
+        dist_to_road_center: Distância ao centro da via mais próxima (px).
 
     Returns:
-        Tupla (reward_total, componentes_dict) onde componentes_dict
-        contém cada componente nomeado para logging/ablation.
+        Tupla (reward_total, componentes_dict).
 
-    Note (decisão de design):
-        Retornamos o dicionário de componentes junto com o total para
-        permitir logging granular no TensorBoard. Isso é essencial
-        para diagnosticar reward hacking — se um componente domina os
-        demais, sabemos exatamente qual ajustar. Aprendemos isso no
-        projeto anterior onde o agente fazia "donuts" para exploitar
-        a recompensa de velocidade.
+    Note (decisão de design v3):
+        off_road deixou de ser evento terminal. Em vez disso, aplica-se
+        penalidade contínua OFF_ROAD_PENALTY por step. Isso permite que
+        o agente APRENDA a corrigir trajetória em vez de simplesmente
+        ser punido com reset. Combinado com lane-keeping, cria um
+        gradiente suave: centro da via (+), borda (0), fora da via (-).
     """
     components: dict[str, float] = {}
 
@@ -141,8 +150,6 @@ def compute_reward(
         for dist, weight in zip(distances_to_objects, object_weights):
             violation = max(0.0, SAFE_DISTANCE_PX - dist)
             r_safety -= violation * SAFETY_WEIGHT * weight
-    # Normaliza pelo número de objetos para não penalizar cenários densos
-    if distances_to_objects:
         r_safety /= len(distances_to_objects)
     components["r_safety"] = r_safety
 
@@ -156,22 +163,34 @@ def compute_reward(
         r_smooth = SMOOTHNESS_PENALTY
     components["r_smooth"] = r_smooth
 
-    # ── 5. Terminal ──
+    # ── 5. Terminal (APENAS colisão e goal, off-road não é terminal) ──
     r_terminal = 0.0
     if goal_reached:
         r_terminal = GOAL_REWARD
     elif collision:
         r_terminal = COLLISION_PENALTY
-    elif off_road:
-        r_terminal = COLLISION_PENALTY * 0.5  # menos severo que colisão
     components["r_terminal"] = r_terminal
 
     # ── 6. Alive bonus ──
-    r_alive = ALIVE_BONUS if not (collision or goal_reached or off_road) else 0.0
+    r_alive = ALIVE_BONUS if not (collision or goal_reached) else 0.0
     components["r_alive"] = r_alive
 
+    # ── 7. Lane-keeping (centralização na via) ──
+    # Bônus proporcional a quão perto do centro da via o agente está.
+    # max(0, 1 - d/ROAD_HALF_WIDTH) → 1.0 no centro, 0.0 na borda, 0 fora.
+    if not off_road and dist_to_road_center < ROAD_HALF_WIDTH:
+        r_lane = LANE_KEEP_WEIGHT * (1.0 - dist_to_road_center / ROAD_HALF_WIDTH)
+    else:
+        r_lane = 0.0
+    components["r_lane"] = r_lane
+
+    # ── 8. Off-road penalty (per-step, NÃO terminal) ──
+    r_off_road = OFF_ROAD_PENALTY if off_road else 0.0
+    components["r_off_road"] = r_off_road
+
     # ── Total ──
-    r_total = r_progress + r_safety + r_traffic + r_smooth + r_terminal + r_alive
+    r_total = (r_progress + r_safety + r_traffic + r_smooth
+               + r_terminal + r_alive + r_lane + r_off_road)
     components["r_total"] = r_total
 
     return r_total, components

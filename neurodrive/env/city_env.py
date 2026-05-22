@@ -32,6 +32,8 @@ from neurodrive.env.tilemap import (
     CityMap,
     MAP_HEIGHT,
     MAP_WIDTH,
+    ROAD_CENTER_X,
+    ROAD_CENTER_Y,
     ROAD_EW_BOTTOM,
     ROAD_EW_TOP,
     ROAD_NS_LEFT,
@@ -409,6 +411,26 @@ class CityDriveEnv(gym.Env):
                 weights.append(1.5)  # pedestres têm peso maior
         return distances, weights
 
+    def _dist_to_road_center(self) -> float:
+        """Calcula a distância do ego ao centro da via mais próxima.
+
+        Retorna a menor distância perpendicular entre o ego e o eixo
+        central da via NS (x=320) ou EW (y=320).
+
+        Returns:
+            Distância em pixels ao centro da via mais próxima.
+
+        Note (decisão de design v3):
+            Usado pelo lane-keeping reward para criar gradiente suave:
+            centro da via → bônus máximo, borda → bônus zero.
+        """
+        # Distância ao eixo NS (x = ROAD_CENTER_X = 320)
+        dist_ns = abs(self._ego_x - ROAD_CENTER_X)
+        # Distância ao eixo EW (y = ROAD_CENTER_Y = 320)
+        dist_ew = abs(self._ego_y - ROAD_CENTER_Y)
+        # Retorna a menor (via mais próxima)
+        return min(dist_ns, dist_ew)
+
     # === Gymnasium API ===
 
     def reset(
@@ -521,6 +543,7 @@ class CityDriveEnv(gym.Env):
 
         # --- Calcula recompensa ---
         obj_dists, obj_weights = self._get_object_distances()
+        road_center_dist = self._dist_to_road_center()
         reward, reward_components = compute_reward(
             dist_to_goal_prev=self._prev_dist_to_goal,
             dist_to_goal_curr=dist_to_goal,
@@ -532,14 +555,15 @@ class CityDriveEnv(gym.Env):
             collision=collision,
             goal_reached=goal_reached,
             off_road=off_road,
+            dist_to_road_center=road_center_dist,
         )
 
         # --- Atualiza estado ---
         self._prev_dist_to_goal = dist_to_goal
         self._prev_action = action
 
-        # --- Terminação ---
-        terminated = bool(collision or goal_reached or off_road)
+        # --- Terminação (v3: off_road NÃO termina mais) ---
+        terminated = bool(collision or goal_reached)
         truncated = bool(self._step_count >= MAX_STEPS)
 
         # --- Info ---
